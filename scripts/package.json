@@ -1,0 +1,24 @@
+{
+  "name": "@threshold/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PHASE 0 verification harness and deployment/demo scripts (docs/16)",
+  "scripts": {
+    "discover": "tsx src/03-discover.ts",
+    "poolreads": "tsx src/04-poolreads.ts",
+    "topic0": "tsx src/05-topic0.ts",
+    "cross": "tsx src/06-crossing-order.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@somnia-chain/markets-sdk": "0.28.1",
+    "dotenv": "^16.4.5",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.0"
+  }
+}

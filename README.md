@@ -100,11 +100,17 @@ Somnia Shannon (chain `50312`). See [`docs/13-deployment.md`](docs/13-deployment
 [`docs/14-demo-script.md`](docs/14-demo-script.md).
 
 ## Contract addresses
-| Contract | Shannon |
+All verified on the [Shannon explorer](https://shannon-explorer.somnia.network) (Blockscout).
+
+| Contract | Shannon (chain 50312) |
 |---|---|
-| ThresholdRegistry | `<filled at deploy>` |
-| ThresholdHandler | `<filled at deploy>` |
-| DemoVault | `<filled at deploy>` |
+| ThresholdRegistry | [`0xb31014A95Da14e94900a5b8c58087E8f754e596d`](https://shannon-explorer.somnia.network/address/0xb31014A95Da14e94900a5b8c58087E8f754e596d?tab=contract) |
+| ThresholdHandler | [`0x693DC66E334674d5FF1ECf846d64E5086187195e`](https://shannon-explorer.somnia.network/address/0x693DC66E334674d5FF1ECf846d64E5086187195e?tab=contract) |
+| DemoVault | [`0xcAc26cFD38d72F8730dEFA46a271D055246a1463`](https://shannon-explorer.somnia.network/address/0xcAc26cFD38d72F8730dEFA46a271D055246a1463?tab=contract) |
+
+First autonomous execution: [`0x92e6717d…6dea`](https://shannon-explorer.somnia.network/tx/0x92e6717dbcc424f2e1a6d94442609b60b98e88146f87dbd4a3826c602ea96dea)
+— `TriggerExecuted(id=3, probabilityBps=4490, success=true)`, sent from the Registry by the
+reactivity precompile's scheduled tick, no keeper.
 
 ### DreamDEX (CREATE3, identical on both chains)
 | | |

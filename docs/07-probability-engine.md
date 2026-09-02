@@ -97,6 +97,14 @@ the definition of a legitimate price move.
 
 `maxLevels` = **8** for the MVP. Enough to be meaningful, bounded for gas.
 
+> **PHASE 2 — as built.** `ProbabilityLib.snapshot()` captures the up-to-8 `Level[]` per side (each
+> `{priceBps, notional}`) plus the flags, in one shared read. `depthWeightedBps(snap,
+> minDepthPerSide)` then does the per-trigger walk: `vwapUntil(bids, minDepthPerSide)` /
+> `vwapUntil(asks, minDepthPerSide)`, returning `(midBps, bidDeep, askDeep)` where `xDeep` is
+> "consumed notional ≥ minDepthPerSide". So gate G8 and the signal come out of the same walk. If
+> `minDepthPerSide == 0`, the walk consumes every captured level and `xDeep` just means "some
+> liquidity". Verified by U2–U9 (`test/unit/ProbabilityLib.t.sol`), fuzz at 10k runs.
+
 ### 3.3 Confidence score (display only, never gates execution)
 ```
 confidenceBps = 10000
@@ -167,6 +175,16 @@ The scheduled callback must be idempotent — see `08` execution-once invariant.
 
 `FALLBACK` if `scheduleSubscriptionAtTimestamp` misbehaves: accept "executes on the first fill after
 dwell elapses". Document the limitation. Do not silently ship the broken version.
+
+> **PHASE 4 — as built.** The schedule call is made from `ThresholdRegistry.scheduleDwellExpiry`
+> (only the registry can — `scheduleSubscriptionAtTimestamp` checks the *caller's* 32-STT balance),
+> wrapped in a `try/catch` so a failure emits `DwellExpiryScheduleFailed` and degrades to
+> fill-driven rather than reverting the callback. The handler creates **at most one scheduled tick
+> per callback**, at the latest dwell-end among triggers that entered OBSERVING in that callback —
+> the tick's `_onScheduledTick` re-evaluates *every* trigger on *every* subscribed pool, so a
+> shorter concurrent dwell is still covered, and this hard-bounds callback gas (I5: ~597k for 16
+> triggers, one ~management-cost schedule). A scheduled tick that arrives in the same block as an
+> `OrderFilled` callback is a no-op for an already-terminal trigger (A6).
 
 ## 7. Gas budget
 

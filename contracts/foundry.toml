@@ -2,5 +2,39 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+test = "test"
+script = "script"
+solc = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+via_ir = false
+bytecode_hash = "none"
+cbor_metadata = false
+fs_permissions = [{ access = "read", path = "./" }]
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "@somnia-chain/reactivity-contracts/=lib/somnia-reactivity/",
+]
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+[lint]
+# The dwell / expiry machine intentionally compares against block.timestamp — validator
+# timestamp latitude (a few seconds) is accounted for in the dwell design (docs/07, docs/08).
+exclude_lints = ["block-timestamp"]
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = true
+int_types = "long"
+
+[profile.ci]
+verbosity = 3
+fuzz = { runs = 10000 }
+
+# Shannon testnet (chain 50312). RPC confirmed from docs.somnia.network 2026-09-02.
+[rpc_endpoints]
+shannon = "${SOMNIA_SHANNON_RPC}"
+
+[etherscan]
+shannon = { key = "${EXPLORER_API_KEY}", url = "${SOMNIA_EXPLORER_API_URL}", chain = 50312 }

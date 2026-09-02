@@ -1,0 +1,18 @@
+{
+  "name": "threshold",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Probabilistic automation for DreamDEX Event Contracts on Somnia",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "build:contracts": "forge build --root contracts",
+    "test:contracts": "forge test --root contracts -vvv",
+    "phase0:discover": "pnpm --filter @threshold/scripts discover",
+    "phase0:poolreads": "pnpm --filter @threshold/scripts poolreads",
+    "phase0:topic0": "pnpm --filter @threshold/scripts topic0",
+    "phase0:cross": "pnpm --filter @threshold/scripts cross"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

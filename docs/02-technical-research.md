@@ -175,3 +175,96 @@ The architecture in `03`–`08` rests on ✅-confirmed capabilities, with one fu
 the design.
 
 **PHASE 0 exists to close #6, #9, #11 and #12 in the first two hours.**
+
+---
+
+# PHASE 0 RESULTS
+
+> Harness: `contracts/src/phase0/MinimalSubscriber.sol`, `scripts/src/03-06*.ts`.
+> Runbook: `docs/PHASE0-RUNBOOK.md`. Packages extracted and read from source:
+> `@somnia-chain/reactivity-contracts@0.2.1`, `@somnia-chain/markets-sdk@0.28.1` (and `0.29.0` for
+> comparison).
+
+## Resolved from package source + Somnia docs (2026-09-02)
+
+| Item | Result |
+|---|---|
+| **#6 — 32 STT is on the *calling* contract** | ✅ `CONFIRMED`. `SomniaExtensions._subscribe` checks `address(this).balance < SUBSCRIPTION_OWNER_MINIMUM_BALANCE` (32 ether). `SomniaExtensions` is a `library` with `internal` fns → inlined into the caller → `address(this)` **is the subscriber contract**. docs/03's open question is closed: the **Registry** subscribes and must hold ≥ 32 STT. |
+| **#9 — Shannon RPC / explorer** | ✅ Resolved from docs.somnia.network. RPC `https://api.infra.testnet.somnia.network` (alt `https://dream-rpc.somnia.network`); WS `wss://api.infra.testnet.somnia.network/ws`; explorer `https://shannon-explorer.somnia.network` (Blockscout, api at `/api`); chain `50312`. Multicall3 `0x841b8199E6d3Db3C6f264f6C2bd8848b3cA64223`. Faucets: `testnet.somnia.network`, Google Cloud web3 faucet. |
+| **#12 — `scheduleSubscriptionAtTimestamp`** | ✅ Exists in `SomniaExtensions.sol`. Requires `timestampMillis > (block.timestamp+1)*1000 + 1` (reverts `TimestampInPast`). Builds a filter with `topic0 = Schedule.selector`, `topic1 = bytes32(timestampMillis)`, `emitter = 0x0100`. Behaviour on-chain still needs a live check (0.6-style) but the API is real. |
+| **`onEvent` selector** | The precompile calls `ISomniaEventHandler.onEvent.selector` — `_buildSubscriptionData` hard-codes it. `SomniaEventHandler` gates `msg.sender == 0x0100`, implements ERC-165 for `IERC165` + `ISomniaEventHandler`. Do not override. |
+| **`OrderFilled` topic0** | `keccak256("OrderFilled(uint128,uint128,uint256,uint256,uint256,uint256)")` = `0xc87f4223e9e7c4e4f39f9b34fc9d64d78cdb95d9035b3748cbde59521261a399`. Matches the local signature hash. **Live-log confirmation = 0.5, pending a real fill.** |
+
+## ⚠️ Correction — `closingTop` is NOT in `markets-sdk@0.28.1`
+
+docs/02 (method header) and docs/07 §2 cite `closingTop(uint256 maxSteps)` as `CONFIRMED` "from
+`readsAbi.js` L58". It is **only in `0.29.0`** (readsAbi.ts L61), and even there its comment says
+*"capture-generation pools only; older pools lack the selectors"*. CLAUDE.md + docs/06 mandate pinning
+`0.28.1` exactly.
+
+**Decision:** pin `0.28.1`; **do not use `closingTop` or `closingPrice`.** Derive top-of-book and
+spread from `getBookLevels(isBid, 1)` — the `FALLBACK` docs/07 §2 already names. Works on every pool
+generation, marginally more gas. `ProbabilityLib.snapshot()` and the TS port use `getBookLevels` only.
+`0.28.1` `binaryPoolReadAbi` provides: `getBookLevels`, `getBinaryPoolParams`, `marketNonce`,
+`finalized`, `booksEmpty`, `marketExpiryNs`, `setBacking`, `getOrderBookParameters`.
+
+Other drift noted (cosmetic, we read from live rows):
+- Indexer is **GraphQL** `https://dev.smk.somnia.host/v1/graphql`, not the REST URL in the table above.
+- `0.28.1` testnet `marketCreator` = `0x138CfA6b80475b8c03d7E468b2442278E51e645a` (table says `0x5Ce6…`).
+- Live testnet `VENUE_ID` (bot-kit docs): `0x679795a0195a1b76cdebb7c51d74e058aee92919b8c3389af86ef24535e8a28c` — but Shannon currently shows live markets across ~5 venues; scope explicitly.
+
+## Verified live on Shannon — ALL PASS (2026-09-02)
+
+Deployer `0x89a68d0731F9Bc419d606f1F31Ead04c3fBDFdd6`. Throwaway
+`MinimalSubscriber` at `0xEAB72940c8a186fB656CAC759218d9671e8cc687` (unsubscribed +
+drained after the run; delete `src/phase0/` before PHASE 1).
+
+| Task | Status | Evidence |
+|---|---|---|
+| **0.1 — 32 STT obtainable** | ✅ PASS | Deployer EOA held **40.99 STT** from the faucet — no Telegram ask needed. BLOCKER-1 closed. |
+| **0.2 — a contract can hold 32 STT and subscribe** | ✅ PASS | Deployed `MinimalSubscriber`, funded exactly `32 ether`, `subscribeToPool(pool, ORDER_FILLED_TOPIC0)` → `subId = 15474162`, tx `0x351647d8…`, gas 469_511 (~210k subscription-mgmt + overhead, matches `ISomniaReactivityPrecompile` doc). `InsufficientBalance()` does NOT revert at exactly 32 (`<`, not `<=`). |
+| **0.3 — a live binary market exists** | ✅ PASS | `listBinaryMarkets({status:"Trading"})` + per-row `getMarketOnchain`. Target: BTC 24h, pool `0xA34e33f71C566134CeeCdd6869BcC693B3D69c17`, marketId `0x…010a14`, nonce 64, venue `0x679795a0…8a28c`. |
+| **0.4 — pool reads decode** | ✅ PASS | `getBinaryPoolParams()` → 15-field tuple, `oneCollateral = 1_000_000` (1e6 ✓). `getBookLevels(true/false,8)` → live two-sided book. `marketNonce`/`finalized`/`booksEmpty`/`marketExpiryNs` all read. P(YES) derived on-chain. **No `closingTop`.** |
+| **0.5 — topic0 vs a real log** | ✅ PASS | The crossing order's `OrderFilled` log AND the reactivity callback both carried topic0 `0xc87f4223e9e7c4e4f39f9b34fc9d64d78cdb95d9035b3748cbde59521261a399` = `keccak256(sig)`. **No SDK arity bug.** `data` = 128 bytes (4×uint256): `quantityFilled=5e6`, `takerRemaining=0`, `makerRemaining`, `fillPrice≈227_488` (~0.2275). |
+| **0.6 — callback fires** | ✅ PASS | `pnpm phase0:cross` placed a BUY_YES IOC (tx `0x21f799f1…`, 1 fill). `MinimalSubscriber.callbackCount` 0 → 1. `emitter` = the pool, correct topic0, 128-byte payload. The precompile invoked the handler with **no keeper**. |
+| **0.7 — same block?** | ✅ **SAME BLOCK** | fill block `477759029` == callback block `477759029`. The strong pitch — *"executes in the same block as the fill that qualified it"* — **holds on Shannon**. Assumption #11 resolved YES; no fallback wording needed. |
+
+**PHASE 0 GATE PASSED. Proceed to PHASE 1.** Total cost ~0.11 STT gas + one tUSDC faucet.
+Assumptions #6, #9, #11, #12 all closed. The only correction carried forward is
+`closingTop` (0.29.0-only → use `getBookLevels`, above).
+
+---
+
+# PHASE 5 RESULTS — deployed & proven on Shannon (2026-09-02)
+
+| Contract | Shannon address |
+|---|---|
+| ThresholdRegistry | `0xb31014A95Da14e94900a5b8c58087E8f754e596d` |
+| ThresholdHandler | `0x693DC66E334674d5FF1ECf846d64E5086187195e` |
+| DemoVault (sentinel) | `0xcAc26cFD38d72F8730dEFA46a271D055246a1463` |
+
+**Acceptance MET.** Trigger #3 (threshold 0.40 ABOVE, dwell 5s, target `DemoVault.derisk()`):
+`ARMED → OBSERVING → EXECUTED`. `TriggerExecuted(id=3, probabilityBps=4490, success=true)` at block
+`478022467`, `Derisked(0.1 STT)` same block. Vault `riskyBalance 0.1 → 0`, `safeAmount 0 → 0.1`.
+
+- **Execution tx** `0x92e6717dbcc424f2e1a6d94442609b60b98e88146f87dbd4a3826c602ea96dea` — `from` = the
+  **Registry** (subscription owner), `to` = Handler, calldata `onEvent(0x0100, [Schedule.selector,
+  …], "")`. So the precompile **scheduled the tx from the Registry** — no user, no keeper, no bot.
+- **Fill tx** `0xc7abe63c…` — an ordinary `placeOrder` on the DreamDEX pool. **No transaction was
+  sent to the vault by anyone.**
+- **`scheduleSubscriptionAtTimestamp` behaviour CONFIRMED** — the scheduled dwell-expiry tick is
+  what fired the execution (assumption #12, previously NEEDS VERIFICATION → ✅).
+
+## Shannon deployment gotchas (all cost real time)
+
+| Issue | Fix |
+|---|---|
+| `forge script`/`forge create` EIP-1559 estimation produces a gas price below Shannon's 6 gwei basefee → `Transaction Failure` | Always deploy with **`--legacy`** (docs/18 note confirmed) |
+| `forge script` assigns mainnet-like per-tx gas limits (~3.7M) for a multi-tx deploy → instant OOG. The 12.8 KB registry actually costs **~42.8M gas** on Shannon (~10x mainnet) | Deploy each contract with **`forge create`** (its `eth_estimateGas` is right), wire with `cast send`. `Deploy.s.sol` kept for reference / a chain with normal gas |
+| `forge create --constructor-args … --rpc-url …` silently falls back to `localhost:8545` | Put `--rpc-url` / `--private-key` **before** `--constructor-args` |
+| **Shannon's gas schedule is ~10x EVM standard.** A cold `SSTORE` (0→nonzero) needs **~1.5M gas *available*** even though it consumes ~220k | `MAX_ACTION_GAS` 500k → **2_000_000**; `subGasLimit` default 10M → **50_000_000** (max is 200M). `DemoVault` carries a **1-wei `safeBalance` sentinel** so the demo `derisk()` writes a warm slot (~20k) and fits a modest cap. |
+
+> The **currently deployed** Registry predates the `MAX_ACTION_GAS`/`subGasLimit` bump (it has
+> 500k / 10M). It works for the demo because the sentinel `DemoVault`'s `derisk()` is ~20k. A fresh
+> deploy (or mainnet) uses 2M / 50M. Redeploy when the deployer is re-funded (32.98 STT is locked in
+> the first registry `0xb31014A9…` by invariant I9 — recoverable only down to the 32-STT floor).
