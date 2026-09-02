@@ -6,13 +6,15 @@ out/
 .logs/
 .ignore/
 
-# Ignores development broadcast logs
-!/broadcast
-/broadcast/*/31337/
-/broadcast/**/dry-run/
+# Broadcast logs — the Shannon deploy went through `forge create` + `cast`, not this script,
+# so the only Deploy.s.sol runs here are the failed OOG attempts. Addresses live in the README.
+/broadcast/
 
-# Docs
+# Forge-generated docs
 docs/
+
+# forge verify / deploy scratch output
+shannon-deployment.json
 
 # Dotenv file
 .env
