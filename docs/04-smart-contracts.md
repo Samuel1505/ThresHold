@@ -90,17 +90,26 @@ cancelTrigger(uint256 id)
   state = CANCELLED
   if no remaining active triggers on that pool: _unsubscribe(pool)
 
-markState(uint256 id, TriggerState s)          // onlyHandler
-recordExecution(uint256 id, uint16 pBps, bool ok)  // onlyHandler
+applyEvaluation(uint256 id, TriggerState s, uint64 dwellStart)   // onlyHandler, nonReentrant
+recordExecution(uint256 id, uint16 pBps, bool ok, uint64 executedAt)  // onlyHandler, nonReentrant
+scheduleDwellExpiry(uint256 timestampMillis)   // onlyHandler — best-effort, try/catch internally
 
-setActionAllowed(address target, bytes4 sel, bool ok)   // onlyOwner (protocol admin)
-setPaused(bool)                                          // onlyOwner
+setActionAllowed(address target, bytes4 sel, bool ok)   // onlyAdmin (protocol admin)
+setPaused(bool)                                          // onlyAdmin
+setSubscriptionOptions(uint64 prio, uint64 maxFee, uint64 gasLimit)  // onlyAdmin
 receive() external payable { emit Funded(msg.sender, msg.value); }
-withdrawSurplus(uint256 amt)                             // onlyOwner, must leave >= 32 ether
-emergencyUnsubscribeAll()                                // onlyOwner
+withdrawSurplus(uint256 amt)                             // onlyAdmin, must leave >= 32 ether (I9)
+emergencyUnsubscribeAll()                                // onlyAdmin
+pruneSubscription(address pool)                          // permissionless: drop a dead subscription
 ```
 
-**Access control.** `owner` = deployer (protocol admin) controls the action allow-list, pause and
+> **PHASE 2 note.** The single handler write path is `applyEvaluation(id, newState, dwellStart)` —
+> it sets `dwellStart` verbatim (block.timestamp on entering OBSERVING, 0 otherwise) and emits
+> `TriggerStateChanged` on a real transition. `recordExecution` stores `lastExecutedAt` (recurring
+> cooldown) and emits `ExecutionRecorded`. The handler emits `TriggerExecuted(id, pBps, ok,
+> returndataHash)` itself — that is the event the frontend watches (docs/03).
+
+**Access control.** `admin` = deployer (protocol admin) controls the action allow-list, pause and
 funding. Trigger owners control only their own triggers. The handler alone may mutate trigger state.
 
 ---
@@ -113,55 +122,68 @@ funding. Trigger owners control only their own triggers. The handler alone may m
 contract ThresholdHandler is SomniaEventHandler {
     ThresholdRegistry public immutable registry;
 
-    function _onEvent(address emitter, bytes32[] calldata topics, bytes calldata data)
+    function _onEvent(address emitter, bytes32[] calldata topics, bytes calldata /*data*/)
         internal override
     {
+        emit CallbackEntered(emitter, topics.length != 0 ? topics[0] : bytes32(0), ...);
+        if (emitter == PRECOMPILE) { _onScheduledTick(); return; }   // PHASE 4 dwell-expiry tick
+
         uint256[] memory ids = registry.triggersByPool(emitter);
         if (ids.length == 0) return;                 // not our pool — silent
 
-        // Read pool state ONCE, share across all triggers on this pool
+        // Read the book ONCE, share across all triggers on this pool
         PoolSnapshot memory snap = ProbabilityLib.snapshot(IBinaryPool(emitter), MAX_LEVELS);
 
         for (uint i; i < ids.length; ++i) {
-            _evaluate(ids[i], snap);                 // never reverts; try/catch inside
+            try this.evaluateExternal(ids[i], snap) {}          // onlySelf; own call frame per trigger
+            catch { emit TriggerEvaluationFailed(ids[i]); }     // one bad trigger can't block 15 (I7)
         }
     }
 }
 ```
 
+An event is emitted on **every** callback entry before any logic (`CallbackEntered`), plus
+`GateFailed` / `TriggerExpired` / `DwellStarted` / `DwellReset` along the way — a silent callback
+failure is otherwise undiagnosable (docs/18).
+
 ```
-_evaluate(uint256 id, PoolSnapshot memory snap)
+_evaluate(uint256 id, PoolSnapshot memory snap)                       // via this.evaluateExternal (onlySelf)
   t = registry.get(id)
-  if t.state != ARMED && t.state != OBSERVING: return
-  if t.pinnedNonce != snap.marketNonce:  registry.markState(id, EXPIRED); return   // G2
-  if snap.finalized || snap.expired || snap.booksEmpty || !snap.twoSided: _resetDwell(t); return
-  if snap.spreadBps > t.maxSpreadBps: _resetDwell(t); return                        // G7
-  if snap.bidNotional < t.minDepthPerSide || snap.askNotional < t.minDepthPerSide:
-      _resetDwell(t); return                                                        // G8
+  if t.state != ARMED && t.state != OBSERVING: return                                       // G1
+  if t.pinnedNonce != snap.marketNonce: registry.applyEvaluation(id, EXPIRED, 0); return    // G2
+  if snap.finalized || snap.expired || (t.expiresAt != 0 && now >= t.expiresAt):
+      registry.applyEvaluation(id, EXPIRED, 0); return                                       // G3/G4
+  if snap.booksEmpty || !snap.twoSided: _disqualify(id, t); return                          // G5/G6
+  if snap.spreadBps > t.maxSpreadBps: _disqualify(id, t); return                             // G7
 
-  p = ProbabilityLib.depthWeightedBps(snap)
-  q = (t.direction == ABOVE) ? (p >= t.thresholdBps) : (p <= t.thresholdBps)
+  (p, bidDeep, askDeep) = ProbabilityLib.depthWeightedBps(snap, t.minDepthPerSide)          // G8 + signal
+  if !bidDeep || !askDeep: _disqualify(id, t); return
+  if !ProbabilityLib.qualifies(p, t.thresholdBps, t.direction): _disqualify(id, t); return
 
-  if !q: _resetDwell(t); return
   if t.state == ARMED:
-      t.dwellStart = now; registry.markState(id, OBSERVING)
-      _scheduleDwellExpiry(id, now + t.dwellSec)
-      return
+      registry.applyEvaluation(id, OBSERVING, uint64(now))
+      return now + t.dwellSec        // caller schedules ONE expiry tick per callback (latest end)
   if now - t.dwellStart < t.dwellSec: return
-  if t.recurring && now < t.lastExecutedAt + t.cooldownSec: return
+  if t.recurring && t.lastExecutedAt != 0 && now < t.lastExecutedAt + t.cooldownSec: return
 
   _execute(id, t, p)
 
+_disqualify(id, t)   // reset the dwell, never accumulate across gaps (docs/08)
+  if t.state == OBSERVING: registry.applyEvaluation(id, ARMED, 0)
+
 _execute(uint256 id, Trigger memory t, uint16 p)
   // EFFECTS BEFORE INTERACTION
-  registry.markState(id, t.recurring ? ARMED : EXECUTED)
-  registry.recordExecution(id, p, /*pending*/ false)
-  bytes memory cd = abi.encodePacked(t.selector, t.payload)
-  (bool ok, ) = t.target.call{ gas: t.actionGasCap }(cd)
-  registry.recordExecution(id, p, ok)
-  if (!ok && !t.recurring) registry.markState(id, FAILED)
-  emit TriggerExecuted(id, p, ok)
+  registry.applyEvaluation(id, t.recurring ? ARMED : EXECUTED, 0)
+  bytes memory cd = bytes.concat(t.selector, t.payload)
+  (bool ok, bytes memory ret) = t.target.call{ gas: t.actionGasCap }(cd)
+  registry.recordExecution(id, p, ok, uint64(now))
+  if (!ok && !t.recurring) registry.applyEvaluation(id, FAILED, 0)
+  emit TriggerExecuted(id, p, ok, keccak256(ret))
 ```
+
+> **G8 folds into the signal.** Because `minDepthPerSide` is per-trigger, `depthWeightedBps` takes it
+> and returns `(midBps, bidDeep, askDeep)` — one walk of the captured levels computes both the VWAP
+> (over the levels consumed reaching min-depth) and whether that depth was met.
 
 **Critical:** state is written **before** the external call. A malicious target that re-enters
 `onEvent` (it cannot — only `0x0100` may call it) or re-enters the registry finds the trigger already
@@ -175,6 +197,8 @@ execution is impossible.
 Pure/view library. See `07` for the algorithms. Exposes:
 
 ```solidity
+struct Level { uint16 priceBps; uint128 notional; }   // notional = price * qty / oneCollateral
+
 struct PoolSnapshot {
     uint64  marketNonce;
     bool    finalized;
@@ -185,18 +209,27 @@ struct PoolSnapshot {
     uint16  bestBidBps;
     uint16  bestAskBps;
     uint16  spreadBps;
-    uint16  bidVwapBps;
-    uint16  askVwapBps;
-    uint128 bidNotional;
-    uint128 askNotional;
+    Level[] bids;          // best-first, capped at maxLevels — carried so depthWeightedBps
+    Level[] asks;          // can walk them per-trigger (minDepthPerSide is per-trigger)
 }
 
 function snapshot(IBinaryPool pool, uint64 maxLevels) internal view returns (PoolSnapshot memory);
-function depthWeightedBps(PoolSnapshot memory s) internal pure returns (uint16);
+function depthWeightedBps(PoolSnapshot memory s, uint128 minDepthPerSide)
+    internal pure returns (uint16 midBps, bool bidDeep, bool askDeep);
+function vwapUntil(Level[] memory levels, uint128 target)
+    internal pure returns (uint16 vwapBps, uint128 consumed);
+function qualifies(uint16 p, uint16 thresholdBps, Direction direction) internal pure returns (bool);
 function toBps(uint256 priceRaw, uint256 oneCollateral) internal pure returns (uint16);
 ```
 
-Keeping this a library with a pure entry point is what makes the fuzz tests in `12` possible.
+> **Deviation from the earlier struct (docs/07 §3.2 resolution).** The snapshot carries the book
+> `Level[]` rather than pre-baked `bidVwapBps`/`bidNotional`, because the VWAP truncation point is
+> `minDepthPerSide`, which is per-trigger, not shared. The snapshot is still read ONCE per callback
+> and shared; only the cheap final walk is per-trigger. `toBps` clamps a price above `oneCollateral`
+> to 10000 rather than wrapping. All functions saturate rather than revert on a hostile pool.
+
+Keeping this a library with pure entry points is what makes the fuzz tests in `12` (U8/U9, 10k runs)
+and the TS parity port (P1/P2) possible.
 
 ---
 

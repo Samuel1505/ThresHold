@@ -76,10 +76,17 @@ Batch with `multicall`; raise the poll interval to 3s; consider the single cache
 ### `forge script` fails to broadcast
 Verify the RPC URL and that the deployer has STT. Try `--legacy` if EIP-1559 estimation misbehaves.
 
-### Contract verification fails
-`NEEDS VERIFICATION` — Somnia's explorer may be Blockscout; try
-`forge verify-contract --verifier blockscout --verifier-url <explorer>/api`. Not required for
-submission.
+### Contract verification
+✅ Confirmed working (PHASE 5). Shannon explorer is Blockscout, no API key:
+```bash
+forge verify-contract <addr> src/<Name>.sol:<Name> \
+  --verifier blockscout --verifier-url https://shannon-explorer.somnia.network/api \
+  --compiler-version 0.8.30 --num-of-optimizations 200 \
+  --constructor-args <abi-encoded>  --watch
+```
+`bytecode_hash = "none"` + `cbor_metadata = false` in `foundry.toml` make it a clean match.
+`forge verify-contract` reads `[etherscan]` config even with `--verifier blockscout`, so either set
+`SOMNIA_EXPLORER_API_URL` / `EXPLORER_API_KEY` in the env or drop that section from `foundry.toml`.
 
 ## Demo day
 

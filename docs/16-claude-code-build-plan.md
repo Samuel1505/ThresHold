@@ -30,25 +30,73 @@ Install `@somnia-chain/reactivity-contracts@0.2.1`, `@somnia-chain/markets-sdk@0
 wagmi. Solidity `0.8.30`. Commit `foundry.toml`, `.env.example`, CI running `forge test`.
 **Acceptance:** `forge build` and `pnpm --filter web build` both succeed.
 
-## PHASE 2 — Contracts (6h)
+## PHASE 2 — Contracts (6h) — ✅ DONE (2026-09-02)
 Create in order: `IBinaryPool.sol`, `ProbabilityLib.sol`, `ThresholdRegistry.sol`,
 `ThresholdHandler.sol`, `DemoVault.sol`, `MockBinaryPool.sol`. Follow `04` exactly.
 **Acceptance:** U1–U21 pass. `ProbabilityLib` fuzz (U8, U9) passes 10k runs.
 
-## PHASE 3 — Probability engine hardening (3h)
+> Built + `Types.sol`. **45 tests pass** (`forge test`): U1–U21 in `test/unit/{ProbabilityLib,
+> Registry,StateMachine}.t.sol`; U8/U9 fuzz at 10k runs (CI profile); plus early adversarial
+> coverage in `test/unit/HandlerGuards.t.sol` (A2, A3, A7, A8, A14) and gate G7/G8. Contract sizes:
+> Registry 12.1 KB, Handler 8.7 KB — well inside the limit. Two spec resolutions recorded in `04`
+> and `07`: (1) `ProbabilityLib.PoolSnapshot` carries the `Level[]` book so `depthWeightedBps` can
+> walk it per-trigger (`minDepthPerSide` is per-trigger); (2) the registry handler API is
+> `applyEvaluation(id, state, dwellStart)` + `recordExecution(id, pBps, ok, ts)`.
+> `scheduleSubscriptionAtTimestamp` is a stubbed no-op until PHASE 4 (fill-driven meanwhile).
+
+## PHASE 3 — Probability engine hardening (3h) — ✅ DONE (2026-09-02)
 Implement `snapshot()` and all eight gates. Write A4, A5, A10, A11 against `MockBinaryPool`.
 **Acceptance:** A4 proves a single thin-level fill does not move the depth-weighted mid > 100 bps.
 
-## PHASE 4 — Reactivity wiring (4h)
+> `snapshot()` + gates landed in PHASE 2. **A4, A4b, A5, A10, A11, A11b** in
+> `test/adversarial/ProbabilityAttacks.t.sol` — A4 demonstrates a **195-bps touch spike** moving the
+> depth-weighted mid **< 100 bps**, trigger stays ARMED. Plus 8 edge/fuzz tests in
+> `test/unit/ProbabilityEdges.t.sol` (zero-qty / zero-price levels, 18-dp collateral, price >
+> `oneCollateral` clamp, `maxLevels` truncation, empty pool). **59 tests pass** (CI profile, 10k
+> fuzz). **Hardening bug found + fixed:** `_convert` could revert on `price * quantity` overflow
+> from a hostile pool — snapshot is on the callback path, so it now saturates to `uint128.max`
+> instead. `test/mocks/LibHarness.sol` exposes the internal lib for direct assertions.
+
+## PHASE 4 — Reactivity wiring (4h) — ✅ DONE (2026-09-02)
 `_subscribe` / `_unsubscribe` in the registry. `_onEvent` dispatch loop with per-trigger `try/catch`.
 `scheduleSubscriptionAtTimestamp` for dwell expiry. Emit an event on **every** callback entry —
 without it, silent failures are undiagnosable.
 **Acceptance:** A1, A2, A3, A6, I3, I5 pass. **I5 measures < 10M gas for 16 triggers.**
 
-## PHASE 5 — Deploy to Shannon (2h)
+> `_subscribe`/`_onEvent`/`try-catch`/`CallbackEntered` landed in PHASE 2. This phase added the
+> dwell-expiry schedule: `registry.scheduleDwellExpiry(tsMillis)` (only the registry can — it holds
+> the 32 STT), best-effort with an internal `try/catch` (`DwellExpiryScheduled` /
+> `DwellExpiryScheduleFailed`). The handler schedules **one tick per callback** at the latest
+> concurrent dwell end — the tick re-evaluates every trigger, so shorter dwells are covered, and
+> any fill evaluates earlier regardless. **68 tests pass** (CI, 10k fuzz):
+> - **A1** `test/adversarial/Reactivity.t.sol` — constant == `keccak256(sig)` **and** matches a real
+>   `MockBinaryPool.emitOrderFilled` log (3 topics, 128-byte data, `fillPrice` non-indexed).
+> - **A2/A3** in `HandlerGuards.t.sol` (PHASE 2). **A6** — `OrderFilled` + scheduled tick in the same
+>   block → exactly one `TriggerExecuted`, one `Derisked`.
+> - **I3** — nonce mismatch → `EXPIRED`, never executes across any number of fills/ticks.
+> - **I5** — 16 triggers, one callback: **fresh-qualify 597k gas, all-execute 595k** (measured with
+>   a `vm.etch`-ed precompile that burns ~management-cost gas). **~6% of the 10M limit.**
+> - Plus: dwell completes in a totally silent book via the scheduled tick; the tick re-validates
+>   gates (one-sided book → resets, not blind-executes); a scheduling failure degrades to
+>   fill-driven without bricking the callback.
+
+## PHASE 5 — Deploy to Shannon (2h) — ✅ DONE (2026-09-02)
 Per `13`. Fund registry. Allow-list `DemoVault.derisk()`. Arm one trigger by `cast`. Cross the market
 manually. Confirm execution on-chain.
 **Acceptance:** a real `TriggerExecuted` log exists on Shannon with no manual transaction to the vault.
+
+> **MET.** Registry `0xb31014A95Da14e94900a5b8c58087E8f754e596d`, Handler
+> `0x693DC66E334674d5FF1ECf846d64E5086187195e`, DemoVault
+> `0xcAc26cFD38d72F8730dEFA46a271D055246a1463`. Trigger #3 fired
+> `TriggerExecuted(id=3, probabilityBps=4490, success=true)` at block 478022467
+> (tx `0x92e6717d…`, sent **from the Registry by the reactivity precompile's scheduled tick** — no
+> user/keeper); `Derisked(0.1 STT)` same block. Full write-up + the Shannon deployment gotchas
+> (`--legacy`, ~10x gas schedule, `forge create` not `forge script`, the cold-SSTORE 1.5M-available
+> cliff → `MAX_ACTION_GAS` 2M / `subGasLimit` 50M / `DemoVault` 1-wei sentinel) in
+> `docs/02` → `# PHASE 5 RESULTS`. `scripts/src/07-e2e-demo.ts` drives it end to end.
+
+> **Milestone reached: the project is submittable.** The core claim — a market belief drove an
+> autonomous on-chain action with no keeper — is demonstrable on Shannon.
 
 > **Milestone: after PHASE 5 the project is submittable.** Everything after this raises the score;
 > nothing after this is required for the core claim to be true. If time collapses, stop here and
