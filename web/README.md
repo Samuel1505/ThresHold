@@ -26,3 +26,11 @@ Dark instrument panel. Layered near-black surfaces, hairline seams (not shadows)
 numbers, one accent per trigger state (armed blue / observing amber / executed green / failed red).
 Motion only where it communicates — the execution pulse is the one deliberate animation;
 `prefers-reduced-motion` is respected. Tokens: `app/globals.css`.
+
+## Demo affordance — "Simulate a trade"
+
+Triggers fire on real `OrderFilled` events. In real use the market produces them; for a demo,
+`app/api/cross` places one small crossing order server-side (the `MarketNudge` button on the
+trigger, demo, and market pages) so a trigger fires on cue — the visitor signs nothing. Needs
+`DEMO_TRADER_PRIVATE_KEY` (a throwaway key with STT + tUSDC) in `web/.env.local`; without it the
+button is disabled and you wait for organic fills.

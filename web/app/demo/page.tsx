@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { Addr } from "@/components/ui/Address";
 import { StateBadge } from "@/components/ui/StateBadge";
 import { BeliefToActionFlow } from "@/components/trigger/BeliefToActionFlow";
+import { MarketNudge } from "@/components/market/MarketNudge";
 import { NumberInput } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
@@ -129,19 +130,26 @@ function Demo() {
             </div>
           }
         />
-        <div className="p-4">
+        <div className="space-y-4 p-4">
           {trigger && trigger.state !== TriggerState.NONE ? (
-            <BeliefToActionFlow
-              probabilityBps={p}
-              thresholdBps={trigger.thresholdBps}
-              direction={trigger.direction}
-              dwellStart={trigger.dwellStart}
-              dwellSec={trigger.dwellSec}
-              state={trigger.state}
-              targetLabel="DemoVault.derisk()"
-              riskySafe={{ risky: vault.risky, safe: vault.safe }}
-              fired={pulse}
-            />
+            <>
+              <BeliefToActionFlow
+                probabilityBps={p}
+                thresholdBps={trigger.thresholdBps}
+                direction={trigger.direction}
+                dwellStart={trigger.dwellStart}
+                dwellSec={trigger.dwellSec}
+                state={trigger.state}
+                targetLabel="DemoVault.derisk()"
+                riskySafe={{ risky: vault.risky, safe: vault.safe }}
+                fired={pulse}
+              />
+              {trigger.pool && trigger.state !== TriggerState.EXECUTED && (
+                <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
+                  <MarketNudge pool={trigger.pool} label="Cross the market →" size={10} />
+                </div>
+              )}
+            </>
           ) : (
             <p className="text-sm text-fg-3">
               Trigger #{triggerId} doesn&apos;t exist. Arm one targeting the demo vault, then put its id here.

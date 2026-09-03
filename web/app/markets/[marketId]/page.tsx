@@ -19,6 +19,7 @@ import { Sparkline } from "@/components/probability/Sparkline";
 import { OrderBookTable } from "@/components/book/OrderBookTable";
 import { DepthChart } from "@/components/book/DepthChart";
 import { GateChecklist } from "@/components/trigger/GateChecklist";
+import { MarketNudge } from "@/components/market/MarketNudge";
 import { pct, until, nsToDate } from "@/lib/format";
 
 export default function MarketDetail({ params }: { params: { marketId: string } }) {
@@ -130,6 +131,13 @@ export default function MarketDetail({ params }: { params: { marketId: string } 
                 <Sparkline samples={history} showThreshold={false} height={80} />
               </div>
             </Panel>
+
+            {pool && (
+              <Panel className="p-4">
+                <div className="label mb-2">Demo</div>
+                <MarketNudge pool={pool} label="Simulate a trade" size={8} />
+              </Panel>
+            )}
           </div>
 
           {/* right: book, depth, gates, triggers */}
