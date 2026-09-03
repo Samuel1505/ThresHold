@@ -74,6 +74,11 @@ the design is real rather than a happy-path prototype.
 
 If these diverge, the UI preview lies about whether a trigger will fire. Non-negotiable.
 
+> ✅ **Done (PHASE 6).** `contracts/test/parity/Parity.t.sol` (5) + `web/lib/probability.test.ts`
+> (vitest, 6) assert the **same fixture inputs and expected outputs** across the Solidity library
+> and its TS port — `toBps` at 6/18 dp, symmetric book, thin-top-over-a-gap (`midBps == 5193` both
+> sides), one-sided, below-min-depth, `vwapUntil` truncation. Change either library → one breaks.
+
 ## End-to-end (Shannon)
 
 1. Deploy registry, handler, vault. Fund registry ≥32 STT. Allow-list `DemoVault.derisk()`.

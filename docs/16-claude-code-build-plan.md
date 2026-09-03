@@ -102,15 +102,38 @@ manually. Confirm execution on-chain.
 > nothing after this is required for the core claim to be true. If time collapses, stop here and
 > record the demo from `cast` output.
 
-## PHASE 6 — TS probability port + parity tests (2h)
+## PHASE 6 — TS probability port + parity tests (2h) — ✅ DONE (2026-09-03)
 `web/lib/probability.ts` mirroring `ProbabilityLib`. Shared JSON fixtures.
 **Acceptance:** P1, P2 pass exactly.
 
-## PHASE 7 — Frontend (8h)
+> `web/lib/probability.ts` — bigint throughout, same integer-division / clamp / uint128-saturation
+> as the Solidity. `snapshot` / `vwapUntil` / `depthWeightedBps` / `toBps` / `evaluateGates` (the
+> full G1–G8 + threshold preview). Parity is a matched pair: `contracts/test/parity/Parity.t.sol`
+> (5 tests) and `web/lib/probability.test.ts` (vitest, 6 tests) assert the **same fixture inputs
+> and expected outputs** — fixture B (thin-top-over-a-gap) lands on `midBps == 5193` on both sides.
+> Change either library and one breaks.
+
+## PHASE 7 — Frontend (8h) — ✅ DONE (2026-09-03)
 Order: chain config + wallet → Markets → Market Detail (gauge, book, `GateChecklist`) → Trigger
 Builder with live preview → Active Triggers → Trigger Detail with `BeliefToActionFlow` → Dashboard.
 Multicall every read. Poll 2s. Watch `TriggerExecuted`.
 **Acceptance:** all seven MVP criteria in `01` pass in a browser.
+
+> `web/` — Next.js 14 App Router, wagmi v2 / viem v2, Tailwind, TanStack Query. Hand-rolled,
+> no `create-next-app`, no component library. All 8 routes built + `next build` green.
+> - **The rule holds**: probability everywhere comes from `usePoolSnapshot` (a multicall of
+>   `getBinaryPoolParams` / `getBookLevels` / `marketNonce` / …) → `lib/probability.ts`. The
+>   `@somnia-chain/markets-sdk` is used **only** for discovery, server-side, in
+>   `app/api/markets/route.ts` (5s cache). `watchContractEvent` for the live feeds.
+> - Components per docs/09: `ProbabilityGauge`, `GateChecklist`, `OrderBookTable`, `DepthChart`,
+>   `Sparkline`, `ThresholdSlider`, `DwellSelector`/`ActionSelector`, `TriggerCard`,
+>   `DwellProgressRing`, `ExecutionCard`, `BeliefToActionFlow`, `SubscriptionBanner`, `NetworkGuard`.
+> - Design: dark instrument panel — IBM Plex Sans/Mono, layered near-black surfaces, hairline
+>   seams, tabular numerics, one accent per trigger state, the execution pulse as the only motion,
+>   `prefers-reduced-motion` respected. No gradients / glass / emoji.
+> - Shannon build notes: `@vercel/nft` crashes on a dep → `outputFileTracing: false`; wagmi's
+>   connector barrel drags in unresolvable Coinbase x402 modules → aliased to `false`; the market
+>   SDK is a `serverComponentsExternalPackages` entry. All in `web/next.config.mjs`.
 
 ## PHASE 8 — Demo page + rehearsal (3h)
 `/demo` per `14`. Run the full sequence end to end **twice**. Fix whatever was flaky.

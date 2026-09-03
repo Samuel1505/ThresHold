@@ -87,3 +87,28 @@ Dark, instrument-panel aesthetic — this is a control surface, not a trading ap
 
 The animated pulse on execution is the only motion in the app, which is what makes it read as
 significant on video.
+
+---
+
+## As built (PHASE 6 + 7, 2026-09-03)
+
+`web/` — Next 14 App Router, wagmi v2 / viem v2, Tailwind, TanStack Query. Hand-rolled, no
+component library, no `create-next-app`. All routes from the table above; `next build` green.
+
+- **`lib/probability.ts`** is the bigint TS port of `ProbabilityLib.sol`. Parity is enforced by a
+  matched pair of tests — `web/lib/probability.test.ts` (vitest) and
+  `contracts/test/parity/Parity.t.sol` — asserting identical outputs for identical fixtures. **This
+  resolves P1/P2.**
+- **`hooks/usePoolSnapshot`** multicalls `getBinaryPoolParams` / `marketNonce` / `finalized` /
+  `marketExpiryNs` / `getBookLevels(true,8)` / `getBookLevels(false,8)` and runs the port. It is the
+  only probability source in the UI. Polls 2s.
+- **Market discovery** is the one indexer touch — `app/api/markets/route.ts`, server-side SDK call,
+  5s in-memory cache, market metadata + `getMarketOnchain` (pool/nonce/status/expiry) only. The
+  `@somnia-chain/markets-sdk` never reaches the browser bundle.
+- **`GateChecklist`** (`lib/probability.ts` `evaluateGates`) renders G1–G8 + the threshold check
+  live against the current book on the builder and the trigger/market detail pages.
+- Live feeds via `watchContractEvent` (`useTriggerFeed`, `useExecutions`), never `getLogs` polling
+  for state.
+- Design: IBM Plex Sans/Mono, layered near-black surfaces, hairline seams, `tabular-nums`
+  everywhere, one accent per trigger state, the execution pulse (`.pulse-track` in `globals.css`)
+  as the only motion, `prefers-reduced-motion` honoured. No gradients, no glass, no emoji.
