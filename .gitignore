@@ -21,3 +21,6 @@ contracts/broadcast/**/dry-run/
 
 # Logs
 *.log
+
+# Next.js
+next-env.d.ts

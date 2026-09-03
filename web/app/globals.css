@@ -1,0 +1,212 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Threshold — design tokens. Dark instrument panel: near-black layered surfaces,
+   hairline seams instead of shadows, one accent per trigger state, monospace for
+   every number. No gradients, no glass, no blur.
+   ──────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg: #08090b;
+  --panel: #0f1116;
+  --panel-2: #14171e;
+  --well: #0b0c0f;
+
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.12);
+
+  --fg: #e8eaed;
+  --fg-2: #a2a9b4;
+  --fg-3: #6b7280;
+  --fg-4: #464c56;
+
+  /* trigger states — one hue each (docs/09) */
+  --armed: #4f96f6; /* calm blue — live, waiting */
+  --observing: #e0a010; /* amber — dwell counting down */
+  --executed: #33c58c; /* green — fired */
+  --expired: #7b818f; /* gray — inert (expired / cancelled) */
+  --failed: #ee5f6b; /* red — action reverted */
+
+  /* order-book depth (blue/orange — the CVD-safe categorical pair) */
+  --bid: #5c9fda;
+  --ask: #d79a5a;
+  --threshold: #cbb35a; /* threshold marker — warm, distinct from observing amber */
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--line);
+}
+
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv05", "cv08", "ss01";
+}
+
+/* every number is monospace + tabular so columns never jitter */
+.num,
+code,
+kbd,
+samp {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--armed) 30%, transparent);
+}
+
+/* focus — visible, precise, never a fuzzy glow */
+:focus-visible {
+  outline: 2px solid var(--armed);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* thin, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── primitives used across the app ──────────────────────────────────────── */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.hairline {
+  height: 1px;
+  background: var(--line);
+}
+.label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  font-weight: 500;
+}
+
+/* range input — the threshold slider */
+.th-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 26px;
+  background: transparent;
+  cursor: pointer;
+}
+.th-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--threshold) 0%,
+    var(--threshold) var(--pct),
+    var(--line-strong) var(--pct),
+    var(--line-strong) 100%
+  );
+}
+.th-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.th-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--threshold);
+}
+.th-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -7px;
+  height: 18px;
+  width: 8px;
+  border-radius: 3px;
+  background: var(--fg);
+  border: 1px solid var(--bg);
+  transition: transform 120ms var(--ease-out);
+}
+.th-slider::-moz-range-thumb {
+  height: 18px;
+  width: 8px;
+  border-radius: 3px;
+  border: 1px solid var(--bg);
+  background: var(--fg);
+}
+.th-slider:active::-webkit-slider-thumb {
+  transform: scaleY(1.12);
+}
+.th-slider:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--armed);
+  outline-offset: 2px;
+}
+
+/* the one deliberate motion in the app: execution pulse, left → right */
+@keyframes threshold-pulse {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(220%);
+    opacity: 0;
+  }
+}
+.pulse-track {
+  position: relative;
+  overflow: hidden;
+}
+.pulse-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--executed) 55%, transparent),
+    transparent
+  );
+  animation: threshold-pulse 900ms var(--ease-in-out) forwards;
+}
