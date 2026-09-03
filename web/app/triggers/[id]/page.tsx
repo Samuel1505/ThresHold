@@ -25,6 +25,7 @@ import { BeliefToActionFlow } from "@/components/trigger/BeliefToActionFlow";
 import { GateChecklist } from "@/components/trigger/GateChecklist";
 import { Sparkline } from "@/components/probability/Sparkline";
 import { ExecutionCard } from "@/components/trigger/ExecutionCard";
+import { MarketNudge } from "@/components/market/MarketNudge";
 
 export default function TriggerDetail({ params }: { params: { id: string } }) {
   const id = BigInt(params.id);
@@ -173,6 +174,17 @@ export default function TriggerDetail({ params }: { params: { id: string } }) {
 
         {/* config */}
         <div className="space-y-4">
+          {isActive(trigger.state) && (
+            <Panel className="p-4">
+              <div className="label mb-1">Waiting for a fill on this pool</div>
+              <p className="mb-3 text-xs leading-relaxed text-fg-3">
+                The trigger evaluates on every <span className="num">OrderFilled</span>. In real use
+                the market produces those. To see it move now:
+              </p>
+              <MarketNudge pool={trigger.pool} label="Simulate a trade →" />
+            </Panel>
+          )}
+
           <Panel>
             <PanelHeader title="Configuration" />
             <dl className="divide-y divide-line text-xs">
