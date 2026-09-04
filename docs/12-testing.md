@@ -91,7 +91,8 @@ If these diverge, the UI preview lies about whether a trigger will fire. Non-neg
 
 ## Acceptance criteria
 
-- All U, I, A, P tests pass.
-- I5 measured gas < 10M with headroom.
+- ✅ All U, I, A, P tests pass — **99 tests**, CI profile (10k fuzz) green.
+- ✅ I5 measured gas < 10M with headroom — ~597k for 16 triggers (~6% of the limit).
 - E2E completes on Shannon **twice consecutively** — flakiness on demo day is the top risk.
-- `forge coverage` ≥ 85% on `ProbabilityLib` and `ThresholdRegistry`.
+- ✅ `forge coverage` ≥ 85% on `ProbabilityLib` and `ThresholdRegistry` — **100% and 99.23%** lines
+  respectively; `ThresholdHandler` 97.65%, `DemoVault` 100% (PHASE 9, docs/16).
