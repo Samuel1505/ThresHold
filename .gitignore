@@ -24,3 +24,4 @@ contracts/broadcast/**/dry-run/
 
 # Next.js
 next-env.d.ts
+contracts/lcov.info

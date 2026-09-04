@@ -139,8 +139,28 @@ Multicall every read. Poll 2s. Watch `TriggerExecuted`.
 `/demo` per `14`. Run the full sequence end to end **twice**. Fix whatever was flaky.
 **Acceptance:** two consecutive clean runs.
 
-## PHASE 9 — Adversarial completion (2h)
+## PHASE 9 — Adversarial completion (2h) — ✅ DONE (2026-09-04)
 Any remaining A-tests. `forge coverage` ≥ 85% on the two core contracts.
+
+> **A9** (`test/adversarial/GasAndExpiry.t.sol`) — a real infinite-loop target (`GasGuzzler`),
+> capped at `actionGasCap`, proven to burn only its cap (not the callback's whole 10M budget) while
+> a sibling trigger on the same callback still executes (I7). **A12** + **A12b** — the market's own
+> `marketExpiryNs` and the trigger's `expiresAt` deadline, each passing mid-dwell → `EXPIRED`, no
+> execution, and it stays dead through further fills.
+>
+> `test/unit/RegistryCoverage.t.sol` (12 tests) closes the coverage gap directly: admin utilities
+> (`setSubscriptionOptions`, `emergencyUnsubscribeAll`), the permissionless `pruneSubscription` path
+> (including the case terminal states leave dangling — applyEvaluation to EXECUTED does **not**
+> auto-unsubscribe), `cancelTrigger` on an already-terminal trigger (`NotCancellable`), the
+> multi-pool `_unsubscribe` array swap, a direct `receive()` transfer, and — the one that mattered
+> most — the `nonReentrant` guard **actually firing** via a pool whose `finalized()` (invoked as
+> `view`, hence a real STATICCALL) attempts to re-enter `createTrigger` mid-lock. `test/unit/
+> DemoVault.t.sol` (11 tests) rounds out `reset()`/`withdraw()`/`receive()`, previously only
+> exercised indirectly.
+>
+> **Coverage: ProbabilityLib 100%, DemoVault 100%, ThresholdHandler 97.65%, ThresholdRegistry
+> 99.23%** (lines) — all four core contracts clear the 85% bar, not just the two named. **99 tests
+> pass** (was 73), CI profile (10k fuzz) green.
 
 ## PHASE 10 — Docs & submission (3h)
 README per spec. `15` submission text. Record the video. Push the repo.
