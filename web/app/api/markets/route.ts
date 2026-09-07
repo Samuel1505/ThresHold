@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { SomniaMarkets, SOMNIA_TESTNET_ADDRESSES } from "@somnia-chain/markets-sdk";
 import { somniaShannon } from "@somnia-chain/markets-sdk/chains";
-import { INDEXER_URL, WS_RPC_URL, VENUE_ID } from "@/lib/env";
+import { INDEXER_URL, WS_RPC_URL, VENUE_IDS } from "@/lib/env";
 import type { MarketRow } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -35,11 +35,17 @@ async function discover(): Promise<MarketRow[]> {
 
   const c = client();
   const nowSec = Math.floor(Date.now() / 1000);
-  const rows = await c.listBinaryMarkets({
-    ...(VENUE_ID ? { venueId: VENUE_ID } : {}),
-    status: "Trading",
-    limit: 60,
-  });
+  const scopes = VENUE_IDS.length ? VENUE_IDS : [undefined];
+  const perVenue = await Promise.all(
+    scopes.map((venueId) =>
+      c
+        .listBinaryMarkets({ ...(venueId ? { venueId } : {}), status: "Trading", limit: 60 })
+        .catch(() => []),
+    ),
+  );
+  const byId = new Map<string, (typeof perVenue)[number][number]>();
+  for (const r of perVenue.flat()) byId.set(r.marketId, r);
+  const rows = [...byId.values()];
 
   const resolved = await Promise.all(
     rows.map(async (r): Promise<MarketRow | null> => {
