@@ -18,10 +18,13 @@ export const INDEXER_URL = req(
   "NEXT_PUBLIC_DREAMDEX_INDEXER_URL",
   "https://dev.smk.somnia.host/v1/graphql",
 );
-/** Optional venue scope — read off a live market row if unset (venue ids move). */
-export const VENUE_ID = (process.env.NEXT_PUBLIC_VENUE_ID || undefined) as
-  | `0x${string}`
-  | undefined;
+/** Optional venue scope — comma-separated, one or more. Empty = every venue the
+ *  indexer knows (venue ids move, and event-contract series are split across
+ *  several venues by duration). */
+export const VENUE_IDS = (process.env.NEXT_PUBLIC_VENUE_ID || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean) as `0x${string}`[];
 
 export const explorerTx = (hash: string) => `${EXPLORER_URL}/tx/${hash}`;
 export const explorerAddress = (addr: string) => `${EXPLORER_URL}/address/${addr}`;
