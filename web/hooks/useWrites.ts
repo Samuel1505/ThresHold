@@ -59,6 +59,7 @@ export function useArmTrigger() {
               cooldownSec: p.cooldownSec,
             },
           ],
+          type: "legacy",
         });
         setHash(tx);
         return tx;
@@ -120,6 +121,7 @@ export function useCancelTrigger() {
           abi: REGISTRY_ABI,
           functionName: "cancelTrigger",
           args: [id],
+          type: "legacy",
         });
         setHash(tx);
       } catch (e) {
@@ -150,6 +152,7 @@ export function useVaultActions() {
         abi: VAULT_ABI,
         functionName: "deposit",
         value: valueWei,
+        type: "legacy",
       });
       setHash(tx);
     },
@@ -161,6 +164,7 @@ export function useVaultActions() {
       address: DEMO_VAULT,
       abi: VAULT_ABI,
       functionName: "reset",
+      type: "legacy",
     });
     setHash(tx);
   }, [writeContractAsync]);
