@@ -13,7 +13,7 @@ Built for the Somnia × DreamDEX Event Contracts Hackathon.
 | | |
 |---|---|
 | **Live app** | https://getthreshold.vercel.app |
-| **Demo video** | _add link_ |
+| **Pitch Slides** | https://gamma.app/docs/Threshold--kre9t2545gavi4n |
 | **Network** | Somnia Shannon testnet (chain `50312`) |
 | **First autonomous execution** | [`0x92e6717d…6dea`](https://shannon-explorer.somnia.network/tx/0x92e6717dbcc424f2e1a6d94442609b60b98e88146f87dbd4a3826c602ea96dea) — `from` is the Registry contract, no EOA in the loop |
 
